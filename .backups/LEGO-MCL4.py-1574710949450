@@ -1,0 +1,19 @@
+import math
+import random
+import sys
+
+from Robot import Robot
+
+from particleData import *
+
+import time
+
+robot = Robot("B", "C")
+robot.setMotorLimits(30, 720)
+
+POINTS = [(84, 30), (180, 30), (180, 54), (138, 54), (138, 168), (114, 168), (114, 84), (84, 84), (84, 30)]
+
+robot.drawParticles()
+
+for x,y in POINTS:
+    robot.stepToWaypoint(x, y, 20)

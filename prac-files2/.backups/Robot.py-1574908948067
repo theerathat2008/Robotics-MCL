@@ -1,0 +1,420 @@
+import math
+import statistics
+import time
+from queue import Queue
+from particleData import *
+
+import brickpi333 as brickpi3
+
+class Robot:
+    BP = brickpi3.BrickPi333()
+    d = 5.7
+    TURN_CONSTANT = 3
+    FULL_REVOLUTION = 360
+    leftWheel = None
+    rightWheel = None
+    particles = None
+    sonar = None
+    sonarMotor = None
+    leftSensor = None
+    rightSensor = None
+    EXPECTED_VALUE = 130
+
+    def __init__(self, leftWheel, rightWheel):
+        if leftWheel == "A":
+            self.leftWheel = self.BP.PORT_A
+        elif leftWheel == "B":
+            self.leftWheel = self.BP.PORT_B
+        elif leftWheel == "C":
+            self.leftWheel = self.BP.PORT_C
+        else:
+            self.leftWheel = self.BP.PORT_D
+
+        if rightWheel == "A":
+            self.rightWheel = self.BP.PORT_A
+        elif rightWheel == "B":
+            self.rightWheel = self.BP.PORT_B
+        elif rightWheel == "C":
+            self.rightWheel = self.BP.PORT_C
+        else:
+            self.rightWheel = self.BP.PORT_D
+
+        # Set sensors
+        self.__initialiseSensor()
+
+        # Initialise particles
+        self.particles = Particles()
+        self.particles.initialiseParticles(84, 30)
+
+    def moveForward(self, distance):
+        self.resetEncoder()
+        expectedPosition = (distance * self.FULL_REVOLUTION / (self.d * math.pi)) + 15
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition < expectedPosition - 5 or rightPosition < expectedPosition - 5):
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            time.sleep(0.02)
+
+    def moveBackwards(self, distance):
+        self.resetEncoder()
+        expectedPosition = -distance * self.FULL_REVOLUTION / (self.d * math.pi)
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition > expectedPosition + 0.5 or rightPosition > expectedPosition - 0.5):
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            time.sleep(0.02)
+
+    def turnLeft(self, angle):
+        self.resetEncoder()
+
+        expectedPosition = angle * self.TURN_CONSTANT
+
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, -expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition > -expectedPosition + 5 or rightPosition < expectedPosition - 5):
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            time.sleep(0.02)
+
+    def turnRight(self, angle):
+        self.resetEncoder()
+
+        expectedPosition = angle * self.TURN_CONSTANT
+
+        rightPosition = -self.BP.get_motor_status(self.rightWheel)[2]
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, -expectedPosition)
+
+        while (leftPosition < expectedPosition - 5 and rightPosition > -expectedPosition + 5):
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            time.sleep(0.02)
+
+    def stepToWaypoint(self, x, y, STEP):
+        reachedTarget = False
+
+        while not reachedTarget:
+            reachedTarget = self.__navigateToWaypoint(x, y, STEP)
+
+    def __navigateToWaypoint(self, X, Y, STEP):
+        reachedTarget = True
+
+        # Get robot coordinates
+        currentX, currentY, currentAngle = self.particles.getCurrentPosition()
+
+        diffX = X - currentX
+        diffY = Y - currentY
+
+        if (abs(diffX) < 0.5):
+            diffX = 0
+
+        if (abs(diffY) < 0.5):
+            diffY = 0
+
+        # Compute the distance to cover and the rotation angle
+        distance = math.sqrt((diffX) ** 2 + (diffY) ** 2)
+        angle = math.degrees(math.atan2(diffY, diffX))
+        print("\033[94m Distance: \033[0m" + str(distance))
+        print("\033[94m Current Position: \033[0m" + "X: " + str(currentX) + ", Y: " + str(currentY) + ", Theta: " + str(currentAngle))
+        print("\033[94m Target Point: \033[0m" + "(" + str(X) + ", " + str(Y) + ")")
+
+        angle = angle % 360
+        angle -= currentAngle
+
+        if angle > 180:
+            angle -= 360
+
+        if angle < -180:
+            angle += 360
+
+        if distance > STEP:
+            distance = STEP
+            reachedTarget = False
+
+        # If we actually have to move
+        if angle != 0:
+            print("\033[94m Rotation: \033[0m" + str(angle))
+
+            if angle > 0:
+                self.turnLeft(angle)
+            else:
+                self.turnRight(abs(angle))
+
+            self.particles.update(0, angle)
+            self.__runMCL()
+
+        if distance > 0:
+            print("\033[94m Distance to move: \033[0m" + str(distance))
+            self.moveForward(distance)
+            self.particles.update(distance, 0)
+            self.__runMCL()
+
+        return reachedTarget
+
+    def __runMCL(self):
+        print("Position before MCL: " + str(self.particles.getCurrentPosition()))
+        print("Reading value from the sonar")
+        # Get a value from the sonar
+        z = self.getDistance()
+        print("Sonar value: " + str(z))
+        print("Update likelihood")
+        # Update the likelihood
+        self.particles.updateLikelihood(z)
+        print("Normalise")
+        # Normalise
+        self.particles.normalise()
+        print("Resample")
+        # Resample
+        self.particles.resample()
+        print("Position after MCL: " + str(self.particles.getCurrentPosition()))
+        print("\033[94m ---------------------------------------------- \033[0m")
+        self.particles.draw()
+
+    def drawParticles(self):
+        self.particles.draw()
+
+    def speedForward(self):
+        self.BP.set_motor_dps(self.BP.PORT_B, self.FULL_REVOLUTION)
+        self.BP.set_motor_dps(self.BP.PORT_C, self.FULL_REVOLUTION)
+
+    def stop(self):
+        self.BP.set_motor_dps(self.leftWheel, 0)
+        self.BP.set_motor_dps(self.rightWheel, 0)
+
+    def resetEncoder(self):
+        self.BP.offset_motor_encoder(self.leftWheel, self.BP.get_motor_encoder(self.leftWheel))
+        self.BP.offset_motor_encoder(self.rightWheel, self.BP.get_motor_encoder(self.rightWheel))
+
+    def setMotorLimits(self, power, velocity):
+        self.BP.set_motor_limits(self.leftWheel, power, velocity)
+        self.BP.set_motor_limits(self.rightWheel, power - 1, velocity)
+
+    def setSonarLimit(self, power, velocity):
+        self.BP.set_motor_limits(self.sonarMotor, power, velocity)
+
+    def speedVelocity(self, velocity):
+        self.BP.set_motor_dps(self.leftWheel, velocity)
+        self.BP.set_motor_dps(self.rightWheel, velocity)
+
+    def speedVelocity(self, leftVelocity, rightVelocity):
+        self.BP.set_motor_dps(self.leftWheel, leftVelocity)
+        self.BP.set_motor_dps(self.rightWheel, rightVelocity)
+
+    def __initialiseSensor(self):
+        self.BP.set_sensor_type(self.BP.PORT_2, self.BP.SENSOR_TYPE.NXT_ULTRASONIC)
+        self.BP.set_sensor_type(self.BP.PORT_1, self.BP.SENSOR_TYPE.TOUCH)
+        self.BP.set_sensor_type(self.BP.PORT_3, self.BP.SENSOR_TYPE.TOUCH)
+        self.sonar = self.BP.PORT_2
+        self.sonarMotor = self.BP.PORT_A
+        self.leftSensor = self.BP.PORT_1
+        self.rightSensor = self.BP.PORT_3
+        time.sleep(1)
+
+    def __turnSonar(self, angle):
+        # Reset sonar's encoder
+        self.BP.offset_motor_encoder(self.sonarMotor, self.BP.get_motor_encoder(self.sonarMotor))
+
+        sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+
+        if (angle > 0):
+            self.BP.set_motor_position(self.sonarMotor, -angle)
+            while (sonarAngle > -angle + 5):
+                sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+                time.sleep(0.02)
+        else:
+            self.BP.set_motor_position(self.sonarMotor, -angle)
+            while (sonarAngle < -angle - 5):
+                sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+                time.sleep(0.02)
+
+    def getDistance(self):
+        readings = Queue(3)
+
+        # Get sensor readings
+        for i in range(3):
+            try:
+                readings.put(self.BP.get_sensor(self.sonar))
+            except brickpi3.SensorError as error:
+                print(error)
+
+        # Take the minimum value
+        minimumValue = min(list(readings.queue))
+
+        return minimumValue
+
+    def findObject(self):
+        
+        self.__turnSonar(90)
+
+        currentX, currentY, currentTheta = self.particles.getCurrentPosition()
+
+        self.__turnSonar(60)
+
+        forwardReadings = [self.getDistance()]
+        forwardExpectations = []
+
+        backwardsReadings = [self.getDistance()]
+        backwardsExpectations = []
+
+        # Read range values from sonar
+        self.__getSonarRange(currentX, currentY, 120, forwardExpectations, forwardReadings, backwardsExpectations, backwardsReadings)
+
+        self.__turnSonar(-60)
+
+        # Align elements in forwardReadings with backwardsReadings
+        backwardsReadings.reverse()
+
+        # Sum the two lists
+        readings = [(f + b) / 2 for f, b in [x for x in zip(forwardReadings, backwardsReadings)]]
+
+        expectations = [(f + b) / 2 for f, b in [x for x in zip(forwardExpectations, backwardsExpectations)]]
+
+        differenceList = [e - r for e, r in [x for x in zip(expectations, readings)]]
+
+        print(readings)
+        print(expectations)
+        print(differenceList)
+
+        return self.__estimateObjectPosition(expectations, differenceList)
+    
+    def findObjectContinuous(self):
+        self.__turnSonar(-90)
+        
+        time.sleep(1)
+        
+        found = False
+        
+        while not found:            
+            actualDistance = self.getDistance()
+            
+            if (self.EXPECTED_VALUE - actualDistance > 20):
+                found = True
+
+    def hitObject(self, DESIRED_DISTANCE, KP, theta):
+        self.__turnSonar(90)
+        
+        hitTheObject = False
+
+        while not hitTheObject:
+            actualDistance = self.getDistance()
+
+            # Speed to the object
+            self.speedVelocity(100, 100)
+
+            hitTheObject = self.__checkBumper(hitTheObject)
+
+    def __checkBumper(self, hitTheObject):
+            try:
+                rightSensor = self.BP.get_sensor(self.rightSensor)
+                leftSensor = self.BP.get_sensor(self.leftSensor)
+
+                if rightSensor or leftSensor:
+                    self.stop()
+                    self.moveBackwards(5)
+                    return True
+                else:
+                    return False
+            except brickpi3.SensorError as error:
+                print(error)
+
+    def __getSonarRange(self, currentX, currentY, range, forwardExpectations, forwardReadings, backwardsExpectations, backwardsReadings):
+
+        sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+
+        expectedAngle = sonarAngle + range
+
+        self.BP.set_motor_position(self.sonarMotor, expectedAngle)
+
+        while (sonarAngle < expectedAngle - 5):
+            # Get the sonar status
+            sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+
+            walls = WallsMethods.getWalls()
+
+            # Get the expected distance value
+            forwardExpectations.append(WallsMethods.checkWalls(currentX, currentY, -sonarAngle, walls))
+
+            # Read the value
+            forwardReadings.append(self.getDistance())
+            time.sleep(0.02)
+
+        expectedAngle = sonarAngle - range
+
+        self.BP.set_motor_position(self.sonarMotor, expectedAngle)
+
+        while (sonarAngle > expectedAngle + 5):
+            # Get the sonar status
+            sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+
+            walls = WallsMethods.getWalls()
+
+            # Get the expected distance value
+            backwardsExpectations.append(WallsMethods.checkWalls(currentX, currentY, -sonarAngle, walls))
+
+            # Read the value
+            backwardsReadings.append(self.getDistance())
+            
+            print("Number of readings: " + str(len(forwardReadings)))
+            
+            time.sleep(0.02)
+
+    def __estimateObjectPosition(self, expectations, differenceList):
+        distanceList = []
+        angleList = []
+        
+        print("Difference list: " + str(differenceList))
+
+        #for i in range(len(differenceList)):
+         #   angle = -45
+
+          #  if (differenceList[i] > 20):
+           #     distance = expectations[i]
+            #    angle += i * 5.625
+
+             #   distanceList.append(distance)
+              #  angleList.append(angle)
+
+        #distanceEstimate = statistics.mean(distanceList)
+        #angleEstimate = statistics.mean(angleList)
+
+        #x = distanceEstimate * math.cos(math.radians(angleEstimate))
+        #y = distanceEstimate * math.sin(math.radians(angleEstimate))
+        
+        maximumIndex = differenceList.index(max(differenceList))
+        
+        angleEstimate = -60 + maximumIndex * 2.033
+
+        return (0, 0, angleEstimate)
+
+    def resetSonar(self):
+        # Get sonar angle
+        sonarAngle = self.BP.get_motor_status(self.sonarMotor)[2]
+
+        offSetAngle = (360 - sonarAngle) % 360
+
+        if (offSetAngle > 0):
+            rotation = offSetAngle - 360
+            print("Rotation: " + str(rotation))
+            self.__turnSonar(rotation)
+        else:
+            rotation = offSetAngle + 360
+            self.__turnSonar(rotation)
+
+    def resetAll(self):
+        self.BP.reset_all()

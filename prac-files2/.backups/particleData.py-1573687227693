@@ -1,0 +1,264 @@
+#!/usr/bin/env python 
+
+# Some suitable functions and data structures for drawing a map and particles
+import sys
+import time
+import random
+import math
+
+from Particle import Particle
+
+centerToSensor = 8.5
+sigma = 2
+
+# probability of returning garbage value
+k = 0.01
+
+# A Canvas class for drawing a map and particles:
+# 	- it takes care of a proper scaling and coordinate transformation between
+#	  the map frame of reference (in cm) and the display (in pixels)
+class Canvas:
+    def __init__(self,map_size=210):
+        self.map_size    = map_size     # in cm
+        self.canvas_size = 768          # in pixels
+        self.margin      = 0.05*map_size
+        self.scale       = self.canvas_size/(map_size+2*self.margin)
+
+    def drawLine(self,line):
+        x1 = self.__screenX(line[0])
+        y1 = self.__screenY(line[1])
+        x2 = self.__screenX(line[2])
+        y2 = self.__screenY(line[3])
+        print("drawLine:" + str((x1,y1,x2,y2)))
+
+    def drawParticles(self,data):
+        display = [(self.__screenX(d[0]),self.__screenY(d[1])) + d[2:] for d in data]
+        print("drawParticles:" + str(display))
+
+    def __screenX(self,x):
+        return (x + self.margin)*self.scale
+
+    def __screenY(self,y):
+        return (self.map_size + self.margin - y)*self.scale
+
+# A Map class containing walls
+class Map:
+    def __init__(self):
+        self.walls = []
+
+    def add_wall(self,wall):
+        self.walls.append(wall)
+
+    def clear(self):
+        self.walls = []
+
+    def draw(self):
+        for wall in self.walls:
+            canvas.drawLine(wall)
+
+# Simple Particles set
+class Particles:
+
+    def __init__(self):
+        self.numOfParticles = 100
+        self.particles = [0] * self.numOfParticles
+
+    def initialiseParticles(self):
+        for i in range(self.numOfParticles):
+            self.particles[i] = Particle(0, 0, 0, 1 / self.numOfParticles)
+
+    def initialiseParticles(self, x, y):
+        for i in range(self.numOfParticles):
+            self.particles[i] = Particle(x, y, 0, 1 / self.numOfParticles)
+
+    def printParticles(self):
+        for particle in self.particles:
+            print(str(particle.toTuple()))
+
+    def update(self, distance, angle):
+        if distance == 0 and angle == 0:
+            return
+
+        if angle == 0:
+
+            for i in range(self.numOfParticles):
+                e = random.gauss(0, 0.51)
+                f = random.gauss(0, 2.1)
+                self.particles[i].updateParticle(self.particles[i].getWeight(), distance, [e, f, 0], angle)
+        else:
+
+            for i in range(self.numOfParticles):
+                g = random.gauss(0, 11.13)
+                self.particles[i].updateParticle(self.particles[i].getWeight(), distance, [0, 0, g], angle)
+
+    def updateLikelihood(self, z):
+        for i in range(self.numOfParticles):
+            currentParticle = self.particles[i]
+
+            x = currentParticle.getX()
+            y = currentParticle.getY()
+            theta = currentParticle.getAngle()
+            weight = currentParticle.getWeight()
+
+            likelihood = self.__calculateLikelihood(x, y, theta, z)
+
+            print("New likelihood: " + str(likelihood))
+
+            currentParticle.updateWeight(weight * likelihood)
+
+    def __calculateLikelihood(self, x, y, theta, z):
+        # Find out which wall the sonar will hit
+        wall = checkWalls(x, y, theta, getWalls(x, y, theta))
+
+        m = wall[1]
+
+        # Calculate the likelihood
+        likelihood = math.exp((- (z + centerToSensor - m) ** 2) / (2 * sigma)) + k
+
+        return likelihood
+
+    def normalise(self):
+        weightSum = sum([particle.getWeight() for particle in self.particles])
+
+        for i in range(self.numOfParticles):
+            currentParticle = self.particles[i]
+            weight = currentParticle.getWeight()
+            currentParticle.updateWeight(weight / weightSum)
+
+    def resample(self):
+        cumulativeWeight = [0] * self.numOfParticles
+
+        for i in range(self.numOfParticles):
+            cumulativeWeight[i] = sum([self.particles[j].getWeight() for j in range(i + 1)])
+
+        tmpArray = [0] * self.numOfParticles
+
+        counter = 0
+
+        for i in range(self.numOfParticles):
+
+            particleSelector = random.random()
+
+            for j in range(self.numOfParticles):
+                if (cumulativeWeight[j] > particleSelector):
+                    self.__copyParticle(tmpArray, i, self.particles[j])
+                    counter += 1
+                    break
+
+        print("Counter: " + str(counter))
+
+        self.particles = tmpArray
+
+    def __copyParticle(self, array, i, particle):
+        array[i] = Particle(particle.getX(), particle.getY(), particle.getAngle(), 1 / self.numOfParticles)
+
+    def getCurrentPosition(self):
+        print(str(self.particles[0]))
+        x = sum([particle.getX() * particle.getWeight() for particle in self.particles])
+        y = sum([particle.getY() * particle.getWeight() for particle in self.particles])
+        theta = sum([particle.getAngle() * particle.getWeight() for particle in self.particles])
+
+        return (x, y, theta)
+
+    def __particlesToTuple(self):
+        return [particle.toTuple() for particle in self.particles]
+
+    def draw(self):
+        canvas.drawParticles(self.__particlesToTuple())
+
+canvas = Canvas()	# global canvas we are going to draw on
+
+mymap = Map()
+# Definitions of walls
+# a: O to A
+# b: A to B
+# c: C to D
+# d: D to E
+# e: E to F
+# f: F to G
+# g: G to H
+# h: H to O
+WALL_A = (0, 0, 0, 168)
+mymap.add_wall(WALL_A)         # a
+WALL_B = (0, 168, 84, 168)
+mymap.add_wall(WALL_B)         # b
+WALL_C = (84, 126, 84, 210)
+mymap.add_wall(WALL_C)         # c
+WALL_D = (84, 210, 168, 210)
+mymap.add_wall(WALL_D)         # d
+WALL_E = (168, 210, 168, 84)
+mymap.add_wall(WALL_E)         # e
+WALL_F = (168, 84, 210, 84)
+mymap.add_wall(WALL_F)         # f
+WALL_G = (210, 84, 210, 0)
+mymap.add_wall(WALL_G)         # g
+WALL_H = (210, 0, 0, 0)
+mymap.add_wall(WALL_H)         # h
+mymap.draw()
+
+def getWalls(x, y, theta):
+    walls = [WALL_A, WALL_B, WALL_C, WALL_D, WALL_E, WALL_F, WALL_G, WALL_H]
+    newWalls = []
+
+    for wall in walls:
+        if -90 < theta and theta < 90:
+            wallX1 = wall[0]
+            wallX2 = wall[2]
+
+            if wallX1 > x and wallX2 > x:
+                wallY1 = wall[1]
+                wallY2 = wall[3]
+
+                if wallY1 != wallY2:
+                    newWalls.append(wall)
+
+        elif -180 < theta and theta < 0:
+            wallY1 = wall[1]
+            wallY2 = wall[3]
+
+            if wallY1 > y and wallY2 > y:
+                wallX1 = wall[0]
+                wallX2 = wall[3]
+
+                if wallX1 != wallX2:
+                    newWalls.append(wall)
+
+    return newWalls
+
+def checkWalls(x, y, theta, walls):
+
+    candidateWalls = []
+
+    for wall in walls:
+        AX = wall[0]
+        AY = wall[1]
+        BX = wall[2]
+        BY = wall[3]
+
+        m = ((BY - AY) * (AX - x) - (BX - AX) * (AY - y)) / (BY - AY) * math.cos(math.radians(theta)) - (BX - AX) * math.sin(math.radians(
+            theta))
+
+        hitX = x + m * math.cos(math.radians(theta))
+        hitY = y + m * math.sin(math.radians(theta))
+
+
+        if (hitX - AX < 2 and min(AY, BY) <= hitY and hitY <= max(AY, BY)):
+            candidateWalls.append((wall, m))
+        elif (hitY - AY < 2 and min(AX, BX) <= hitX and hitX <= max(AX, BX)):
+            candidateWalls.append((wall, m))
+
+    return minimumWall(candidateWalls)
+
+def minimumWall(candidateWalls):
+    m = sys.maxsize
+    minimumWall = (0, 0, 0, 0)
+
+    for wall in candidateWalls:
+        candidateWall = wall[0]
+        wallDistance = wall[1]
+
+        if wallDistance < m:
+            m = wallDistance
+            minimumWall = candidateWall
+
+    return (minimumWall, m)

@@ -1,0 +1,227 @@
+import math
+import statistics
+import time
+from queue import Queue
+from particleData import *
+
+import brickpi333 as brickpi3
+
+class Robot:
+    BP = brickpi3.BrickPi333()
+    d = 5.7
+    TURN_CONSTANT = 3
+    FULL_REVOLUTION = 360
+    leftWheel = None
+    rightWheel = None
+    particles = None
+
+    def __init__(self, leftWheel, rightWheel):
+        if leftWheel == "A":
+            self.leftWheel = self.BP.PORT_A
+        elif leftWheel == "B":
+            self.leftWheel = self.BP.PORT_B
+        elif leftWheel == "C":
+            self.leftWheel = self.BP.PORT_C
+        else:
+            self.leftWheel = self.BP.PORT_D
+
+        if rightWheel == "A":
+            self.rightWheel = self.BP.PORT_A
+        elif rightWheel == "B":
+            self.rightWheel = self.BP.PORT_B
+        elif rightWheel == "C":
+            self.rightWheel = self.BP.PORT_C
+        else:
+            self.rightWheel = self.BP.PORT_D
+
+        # Set sensors
+        self.__initialiseSensor()
+
+        # Initialise particles
+        self.particles = Particles()
+        self.particles.initialiseParticles(84, 30)
+
+    def moveForward(self, distance):
+        self.resetEncoder()
+        expectedPosition = (distance * self.FULL_REVOLUTION / (self.d * math.pi)) + 15
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition < expectedPosition - 5 or rightPosition < expectedPosition - 5):
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            time.sleep(0.02)
+
+    def moveBackwards(self, distance):
+        self.resetEncoder()
+        expectedPosition = -distance * self.FULL_REVOLUTION / (self.d * math.pi)
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition > expectedPosition + 0.5 or rightPosition > expectedPosition - 0.5):
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            time.sleep(0.02)
+
+    def turnLeft(self, angle):
+        self.resetEncoder()
+
+        expectedPosition = angle * self.TURN_CONSTANT
+
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, -expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition > -expectedPosition + 5 or rightPosition < expectedPosition - 5):
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            time.sleep(0.02)
+
+    def turnRight(self, angle):
+        self.resetEncoder()
+
+        expectedPosition = angle * self.TURN_CONSTANT
+
+        rightPosition = -self.BP.get_motor_status(self.rightWheel)[2]
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, -expectedPosition)
+
+        while (leftPosition < expectedPosition - 5 and rightPosition > -expectedPosition + 5):
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            time.sleep(0.02)
+
+    def stepToWaypoint(self, x, y, STEP):
+        reachedTarget = False
+
+        while not reachedTarget:
+            reachedTarget = self.__navigateToWaypoint(x, y, STEP)
+
+    def __navigateToWaypoint(self, X, Y, STEP):
+        reachedTarget = True
+
+        # Get robot coordinates
+       import math
+import statistics
+import time
+from queue import Queue
+from particleData import *
+
+import brickpi333 as brickpi3
+
+class Robot:
+    BP = brickpi3.BrickPi333()
+    d = 5.7
+    TURN_CONSTANT = 3
+    FULL_REVOLUTION = 360
+    leftWheel = None
+    rightWheel = None
+    particles = None
+
+    def __init__(self, leftWheel, rightWheel):
+        if leftWheel == "A":
+            self.leftWheel = self.BP.PORT_A
+        elif leftWheel == "B":
+            self.leftWheel = self.BP.PORT_B
+        elif leftWheel == "C":
+            self.leftWheel = self.BP.PORT_C
+        else:
+            self.leftWheel = self.BP.PORT_D
+
+        if rightWheel == "A":
+            self.rightWheel = self.BP.PORT_A
+        elif rightWheel == "B":
+            self.rightWheel = self.BP.PORT_B
+        elif rightWheel == "C":
+            self.rightWheel = self.BP.PORT_C
+        else:
+            self.rightWheel = self.BP.PORT_D
+
+        # Set sensors
+        self.__initialiseSensor()
+
+        # Initialise particles
+        self.particles = Particles()
+        self.particles.initialiseParticles(84, 30)
+
+    def moveForward(self, distance):
+        self.resetEncoder()
+        expectedPosition = (distance * self.FULL_REVOLUTION / (self.d * math.pi)) + 15
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition < expectedPosition - 5 or rightPosition < expectedPosition - 5):
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            time.sleep(0.02)
+
+    def moveBackwards(self, distance):
+        self.resetEncoder()
+        expectedPosition = -distance * self.FULL_REVOLUTION / (self.d * math.pi)
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition > expectedPosition + 0.5 or rightPosition > expectedPosition - 0.5):
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            time.sleep(0.02)
+
+    def turnLeft(self, angle):
+        self.resetEncoder()
+
+        expectedPosition = angle * self.TURN_CONSTANT
+
+        rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, -expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, expectedPosition)
+
+        while (leftPosition > -expectedPosition + 5 or rightPosition < expectedPosition - 5):
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            time.sleep(0.02)
+
+    def turnRight(self, angle):
+        self.resetEncoder()
+
+        expectedPosition = angle * self.TURN_CONSTANT
+
+        rightPosition = -self.BP.get_motor_status(self.rightWheel)[2]
+        leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+
+        self.BP.set_motor_position(self.leftWheel, expectedPosition)
+        self.BP.set_motor_position(self.rightWheel, -expectedPosition)
+
+        while (leftPosition < expectedPosition - 5 and rightPosition > -expectedPosition + 5):
+            rightPosition = self.BP.get_motor_status(self.rightWheel)[2]
+            leftPosition = self.BP.get_motor_status(self.leftWheel)[2]
+            time.sleep(0.02)
+
+    def stepToWaypoint(self, x, y, STEP):
+        reachedTarget = False
+
+        while not reachedTarget:
+            reachedTarget = self.__navigateToWaypoint(x, y, STEP)
+
+    def __navigateToWaypoint(self, X, Y, STEP):
+        reachedTarget = True
+
+        # Get robot coordinates
+       

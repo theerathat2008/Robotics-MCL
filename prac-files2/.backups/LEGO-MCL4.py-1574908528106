@@ -1,0 +1,55 @@
+import math
+import random
+import sys
+
+from Robot import Robot
+
+from particleData import *
+
+import time
+
+DESIRED_DISTANCE = -20
+KP = 20
+
+robot = Robot("B", "C")
+robot.setMotorLimits(30, 720)
+robot.setSonarLimit(10, 180)
+
+POINTS = [(84, 30), (180, 30), (180, 54), (138, 54), (138, 168), (114, 168), (114, 84), (84, 84), (84, 30)]
+
+robot.stepToWaypoint(20, 30, sys.maxsize)
+robot.stepToWaypoint(21, 30, sys.maxsize)
+robot.speedVelocity(100, 100)
+robot.findObjectContinuous()
+robot.stop()
+robot.moveForward(2)
+robot.turnLeft(90)
+robot.hitObject(DESIRED_DISTANCE, KP, 0)
+
+# First object
+#robot.stepToWaypoint(120, 30, sys.maxsize)
+#robot.stepToWaypoint(122, 30, sys.maxsize)
+#x, y, theta = robot.findObject()
+#print("Theta: " + str(theta))
+#robot.hitObject(DESIRED_DISTANCE, KP, theta)
+
+# Second object
+#robot.stepToWaypoint(120, 30, sys.maxsize)
+#robot.stepToWaypoint(120, 100, sys.maxsize)
+#x, y, theta = robot.findObject()
+#robot.hitObject(DESIRED_DISTANCE, KP, theta)
+
+# Third object
+#robot.stepToWaypoint(120, 100, sys.maxsize)
+#robot.stepToWaypoint(100, 100, sys.maxsize)
+#robot.stepToWaypoint(84, 100, sys.maxsize)
+#x, y, theta = robot.findObject()
+#if (theta < 2):
+    #robot.stepToWaypoint(100, 100, sys.maxsize)
+    #robot.stepToWaypoint(100, 102, sys.maxsize)
+    #x, y, theta = robot.findObject()
+    #robot.hitObject(DESIRED_DISTANCE, KP, theta)
+#else:
+    #robot.hitObject(DESIRED_DISTANCE, KP, theta)
+
+

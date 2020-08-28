@@ -1,0 +1,104 @@
+#!/usr/bin/env python 
+
+# Some suitable functions and data structures for drawing a map and particles
+import sys
+import time
+import random
+import math
+
+from Particle import Particle
+
+centerToSensor = 8.5
+sigma = 2
+
+# probability of returning garbage value
+k = 0.05
+
+# A Canvas class for drawing a map and particles:
+# 	- it takes care of a proper scaling and coordinate transformation between
+#	  the map frame of reference (in cm) and the display (in pixels)
+class Canvas:
+    def __init__(self,map_size=210):
+        self.map_size    = map_size     # in cm
+        self.canvas_size = 768          # in pixels
+        self.margin      = 0.05*map_size
+        self.scale       = self.canvas_size/(map_size+2*self.margin)
+
+    def drawLine(self,line):
+        x1 = self.__screenX(line[0])
+        y1 = self.__screenY(line[1])
+        x2 = self.__screenX(line[2])
+        y2 = self.__screenY(line[3])
+        print("drawLine:" + str((x1,y1,x2,y2)))
+
+    def drawParticles(self,data):
+        display = [(self.__screenX(d[0]),self.__screenY(d[1])) + d[2:] for d in data]
+        print("drawParticles:" + str(display))
+
+    def __screenX(self,x):
+        return (x + self.margin)*self.scale
+
+    def __screenY(self,y):
+        return (self.map_size + self.margin - y)*self.scale
+
+# A Map class containing walls
+class Map:
+    def __init__(self):
+        self.walls = []
+
+    def add_wall(self,wall):
+        self.walls.append(wall)
+
+    def clear(self):
+        self.walls = []
+
+    def draw(self):
+        for wall in self.walls:
+            canvas.drawLine(wall)
+
+# Simple Particles set
+class Particles:
+
+    def __init__(self):
+        self.numOfParticles = 100
+        self.particles = [0] * self.numOfParticles
+
+    def initialiseParticles(self):
+        for i in range(self.numOfParticles):
+            self.particles[i] = Particle(0, 0, 0, 1 / self.numOfParticles)
+
+    def initialiseParticles(self, x, y):
+        for i in range(self.numOfParticles):
+            self.particles[i] = Particle(x, y, 0, 1 / self.numOfParticles)
+
+    def printParticles(self):
+        for particle in self.particles:
+            print(str(particle.toTuple()))
+
+    def update(self, distance, angle):
+        if distance == 0 and angle == 0:
+            return
+
+        if angle == 0:
+
+            for i in range(self.numOfParticles):
+                # 0.51, 2.1, 11.13
+                e = random.gauss(0, 5)
+                f = random.gauss(0, 0.80)
+                self.particles[i].updateParticle(self.particles[i].getWeight(), distance, [e, f, 0], angle)
+        else:
+
+            for i in range(self.numOfParticles):
+                g = random.gauss(0, 8)
+                self.particles[i].updateParticle(self.particles[i].getWeight(), distance, [0, 0, g], angle)
+
+    def updateLikelihood(self, z):
+        for i in range(self.numOfParticles):
+            currentParticle = self.particles[i]
+
+            x = currentParticle.getX()
+            y = currentParticle.getY()
+            theta = currentParticle.getAngle()
+            weight = currentParticle.getWeight()
+
+            likelihood = self.__calculateLikelihood(x, y, theta, z)

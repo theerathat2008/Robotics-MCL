@@ -1,0 +1,55 @@
+import brickpi3 # import the BrickPi3 drivers
+import math
+import time
+
+BP = brickpi3.BrickPi3() # Create an instance of the BrickPi3 class. BP will be the BrickPi3 object.
+d = 5.7 # This is the diameter of the tiretyre_distance = 6.0
+turn_constant = math.pi
+
+BP.set_motor_limits(BP.PORT_B, 30, 720)
+BP.set_motor_limits(BP.PORT_C, 30, 720)
+
+def moveForward(distance):
+    revolution = distance * 360 / (d * math.pi)
+    
+    BP.set_motor_position(BP.PORT_C, revolution)
+    BP.set_motor_position(BP.PORT_B, revolution)
+    return revolution
+
+def turn(angle):
+    BP.set_motor_position(BP.PORT_C, -angle * turn_constant)
+    BP.set_motor_position(BP.PORT_B, angle * turn_constant)
+    return angle * turn_constant
+
+def resetEncoder():
+    BP.offset_motor_encoder(BP.PORT_C, BP.get_motor_encoder(BP.PORT_B))
+    BP.offset_motor_encoder(BP.PORT_B, BP.get_motor_encoder(BP.PORT_C))
+
+try:
+    for i in range(4):
+        resetEncoder()
+
+        while(True):
+            expected_revolution = moveForward(40)
+            current_revolution = BP.get_motor_status(BP.PORT_B)[2]
+            print(expected_revolution)
+            print(current_revolution)
+            if (current_revolution > expected_revolution - 5):
+                break
+
+        #time.sleep(0)
+
+        resetEncoder()
+
+        while(True):
+            expected_revolution = turn(90)
+            current_revolution = BP.get_motor_status(BP.PORT_C)[2]
+            print(expected_revolution)
+            print(current_revolution)
+            if (current_revolution > expected_revolution - 5):
+                break
+
+        #time.sleep(0)    
+
+except KeyboardInterrupt:
+    BP.reset_all()
